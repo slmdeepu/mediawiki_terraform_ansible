@@ -65,4 +65,4 @@ Steps to setup
 
 7. Open the Browser and complete the installation wizard.
 
-NOTE: When i am executing the ansible task it is prompting for the mysql confirmation. this is the open point one should consider if they are executing the task 
+NOTE: When i am executing the ansible task it is prompting for the mysql confirmation. this is the open point one should consider for executing the playbook 

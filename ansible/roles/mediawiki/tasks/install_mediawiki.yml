@@ -1,0 +1,118 @@
+- name: Install Mediawiki
+  hosts: local
+  become: yes
+  tasks:
+  - name: Add ondrej repository for later versions of PHP
+    apt_repository: repo='ppa:ondrej/php' update_cache=yes
+    
+  - name: Mediawiki | Install packages
+    package:
+      name: "{{ item }}"
+      state: present
+    with_items:
+      - software-properties-common
+      - python-pip
+      - php7.1
+      - libapache2-mod-php7.1
+      - php7.1-common
+      - php7.1-mbstring
+      - php7.1-xmlrpc
+      - php7.1-soap
+      - php7.1-gd
+      - php7.1-xml
+      - php7.1-intl
+      - php7.1-mysql
+      - php7.1-cli
+      - php7.1-mcrypt
+      - php7.1-zip
+      - apache2
+      - mariadb-server
+      - mariadb-client
+      - libmysqlclient-dev
+      
+  - name: Install the MySQL-python through pip
+    pip:
+      name: "{{ item }}"
+      state: forcereinstall
+    with_items:
+      - MySQL-python
+  - name: replace in sql files
+    shell: sed -i 's/Options Indexes FollowSymLinks/Options FollowSymLinks/' /etc/apache2/apache2.conf
+    
+  - name: start the db servers
+    systemd: state=started name=mariadb
+
+  - name: prepare the script to secure the databsae.
+    template: src=../templates/secure.sh.j2 dest='/tmp/secure.sh' mode=0755
+
+  - name: check whether the MySQL Database is secured. 
+    stat: path='/tmp/secure_temp.log' 
+    register: secure_temp_file
+
+  - name: Secure the database.
+    shell: "/tmp/secure.sh > /tmp/secure_temp.log"
+    register: secure_log
+    when: secure_temp_file.stat.exists != true
+
+  - name: Create a new database with name 'wikidatabase'
+    mysql_db:
+      name: "mediawiki"
+      state: present
+      login_user: root
+      login_password: 'mysql'
+
+  - name: Create Wiki User and provide all permissions.
+    mysql_user:
+      name: "mediawiki"
+      password: "mysql"
+      host:  '%'
+      priv: 'mediawiki.*:ALL,GRANT'
+      state: present
+      login_user: root
+      login_password: 'mysql'
+
+
+  - name: Confirmation on Creation.
+    shell: 'mysql -u root -p mysql --execute="SHOW DATABASES;"'
+    register: db_list
+
+  - name: enable service mariadb.
+    systemd:
+      name: mariadb
+      enabled: yes
+
+  - name: Mediawiki | Obtain a mediawiki tarball
+    get_url:
+      url: https://releases.wikimedia.org/mediawiki/1.29/mediawiki-1.29.0.tar.gz
+      dest: /tmp
+      force: no
+
+  - name: Mediawiki | gunzip tarball
+    command: tar zxvf /tmp/mediawiki-1.29.0.tar.gz -C /tmp
+
+  - name: Mediawiki | mv target directory
+    command: mv /tmp/mediawiki-1.29.0 /var/www/html/mediawiki
+    args:
+      creates: /var/www/html/mediawiki
+  - name: Mediawiki | Set permissions for www directory
+    file:
+      path: /var/www/html/mediawiki
+      state: directory
+      mode: "u=rwX,g=rX,o=rX"
+      owner: www-data
+      group: www-data
+      recurse: yes
+
+  - name: prepare the script to secure the databsae.
+    template: src=../templates/mediawiki.conf dest='/etc/apache2/sites-available/mediawiki.conf' mode=0755
+
+  - name: a2ensite mediawiki.conf
+    command: a2ensite mediawiki.conf
+  - apache2_module:
+      state: present
+      name: rewrite
+  - name: restart apache2
+    service:
+      name: apache2
+      state: restarted
+

@@ -7,7 +7,6 @@ What's Covered:
  - Terraform Module that does the following: 
  	- 1 VPC
  	- 4 Subnets  
- 	- 1 Keypair 
  	- 2 EC2 Instances - 1 Web and 1 DB
  	- 1 Elastic Load Balancer
    
